@@ -58,6 +58,7 @@ def updateDatabase(request):
             print(data.key + "data.key already exists")
         else:
             # If else statement that helps decide whether or not this media type is a image or video
+            data_key = "https://s3.amazonaws.com/pi-4/" + data.key
             check_image_video = data.key.lower()
             data_type = ""
             if check_image_video.endswith(".jpg") or check_image_video.endswith(".jpeg") or check_image_video.endswith(".png"):
@@ -70,9 +71,10 @@ def updateDatabase(request):
                 data_type = "this is a folder"
             else:
                 data_type = "not a jpg/jpeg or mp4"
+            data_key = "https://s3.amazonaws.com/pi-4/" + data.key
             Media.objects.create(
                 media_type = data_type,
-                link = data.key,
+                link = data_key,
                 DeviceId = Device.objects.get(id=1),
                 UserId = User.objects.get(id=1),
                 event = Event.objects.get(id=1),
@@ -87,6 +89,7 @@ def updateDatabase(request):
         else:
             # If else statement that helps decide whether or not this media type is a image or video
             # Reuse this function for adding image to database every time a new image is uploaded to the s3 database
+            data_key = "https://s3.amazonaws.com/pi-5/" + data.key
             check_image_video = data.key.lower()
             data_type = ""
             if check_image_video.endswith(".jpg") or check_image_video.endswith(".jpeg") or check_image_video.endswith(".png"):
