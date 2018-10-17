@@ -3,7 +3,7 @@ import bcrypt, sys, os, base64, datetime, hashlib, hmac
 import boto3, csv, json
 import requests
 from django.db import models
-from .models import User, Device, Event, Media
+from .models import User, Device, Event, Media, UserEvent
 client = boto3.client('s3') #low-level functional API
 resource = boto3.resource('s3') #high-level object-oriented API
 v1_raw_bucket = resource.Bucket('pi-1')
@@ -205,6 +205,14 @@ def jsonifyUserData(data):
         }
     return context
 
+def jsonifyUserEventData(data):
+    context = {}
+    for data_point in data:
+        context[data_point.id] = {
+            "user_id" : data_point.user_id,
+            "event_id" : data_point.event_id
+        }
+    return context
 
 # All of the endpoints for retrieving information from the api call
 # functions divider
@@ -238,13 +246,15 @@ def getAllVideos(request): # grabs ALL videos that are being stored in the raw b
 def getAllUserImages(request, user_id): # grabs ALL images connected to the specific user that are being stored in the raw bucket
     context = {}
     if User.objects.filter(id = user_id):
-        response = "Getting all images specific to user " + user_id + "..!! "
         raw_images = Media.objects.filter(UserId = User.objects.get(id=user_id), media_type = "image", raw_or_edited = "raw")
         edited_images = Media.objects.filter(UserId = User.objects.get(id=user_id), media_type = "image", raw_or_edited = "edited")
+        event_data = UserEvent.objects.filter(user_id = user_id)
         json_raw_images = jsonifyMediaData(raw_images)
         json_edited_images = jsonifyMediaData(edited_images)
+        json_event_data = jsonifyUserEventData(event_data)
         context["raw_images"] = json_raw_images
         context["edited_images"] = json_edited_images
+        context["users_events"] = json_event_data
     else:
         context["error"] = "You entered a user that does not exist"
     newContext = json.dumps(context)
@@ -256,10 +266,13 @@ def getAllUserVideos(request, user_id): # grabs ALL videos connected to the spec
         response = "Getting all videos specific to a user..."
         videos_raw = Media.objects.filter(UserId = User.objects.get(id = user_id), media_type = "video", raw_or_edited = "raw")
         videos_edited = Media.objects.filter(UserId = User.objects.get(id = user_id), media_type = "video", raw_or_edited = "edited")
+        event_data = UserEvent.objects.filter(user_id = user_id)
         json_raw_videos = jsonifyMediaData(videos_raw)
         json_edited_videos = jsonifyMediaData(videos_edited)
+        json_event_data = jsonifyUserEventData(event_data)
         context["raw_videos"] = json_raw_videos
         context["edited_videos"] = json_edited_videos
+        context["users_events"] = json_event_data
     else:
         context["error"] = "You entered a user that does not exist"
     newContext = json.dumps(context)
@@ -342,6 +355,18 @@ def getSpecificUser(request, user_id): # grabs all users from the mySQL database
     context = {}
     if User.objects.filter(id = user_id):
         this_user = User.objects.filter(id=user_id)
+        this_user_events = UserEvent.objects.filter(user_id = user_id)
+        context["user_data"] = jsonifyUserData(this_user)
+        context["user_events"] = jsonifyUserEventData(this_user_events)
+    else:
+        context["error"] = "You entered a user that does not exist"
+    newContext = json.dumps(context)
+    return HttpResponse(newContext)
+
+def getSpecificUserByEmail(request, user_email):
+    context = {}
+    if User.objects.filter(email = user_email):
+        this_user = User.objects.filter(email = user_email)
         context = jsonifyUserData(this_user)
     else:
         context["error"] = "You entered a user that does not exist"

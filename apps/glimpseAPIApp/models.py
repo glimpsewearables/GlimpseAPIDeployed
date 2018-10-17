@@ -31,7 +31,6 @@ class Event(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now_add=True)
 
-
 class Media(models.Model):
     # MediaId = models.IntegerField()
     UserId = models.ForeignKey(User, related_name="uploads", null=True)
@@ -44,6 +43,10 @@ class Media(models.Model):
     ranking = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now_add=True)
+
+class UserEvent(models.Model):
+    user_id = models.ForeignKey(User, related_name="user_at_events", null=True)
+    event_id = models.ForeignKey(Event, related_name="event_attending", null=True)
 
 def __str__(self):
         return '%s %s' % (self.title, self.body)
