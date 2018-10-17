@@ -153,8 +153,8 @@ def updateSingleMedia(): # figure out the put request to update an existing obje
 def jsonifyMediaData(data):
     context = {}
     for data_point in data:
-        context[data_point.link] = {
-                "id" : data_point.id,
+        context[data_point.id] = {
+                "link" : data_point.link,
                 "user_id" : data_point.UserId.id,
                 "device_id" : data_point.DeviceId.id,
                 "event_id" : data_point.event.id,
@@ -170,8 +170,8 @@ def jsonifyMediaData(data):
 def jsonifyEventData(data):
     context = {}
     for data_point in data:
-        context[data_point.name] = {
-                "id" : data_point.id,
+        context[data_point.id] = {
+                "name" : data_point.name,
                 "address" : data_point.address,
                 "start_date" : str(data_point.start_date),
                 "end_date" : str(data_point.end_date),
