@@ -1,5 +1,5 @@
 from tastypie.resources import ModelResource
-from .models import User, Event, Device, Media, MediaComment
+from .models import User, Event, Device, Media, MediaComment, MediaLike
 from tastypie.authorization import Authorization
 
 # These files are used for the querying of data on the server side of the applications
@@ -31,4 +31,10 @@ class CommentResource(ModelResource):
     class Meta:
         queryset = MediaComment.objects.all()
         resource_name = "comment"
+        authorization = Authorization()
+
+class LikeResource(ModelResource):
+    class Meta:
+        queryset = MediaLike.objects.all()
+        resource_name = "like"
         authorization = Authorization()
