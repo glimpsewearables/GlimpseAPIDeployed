@@ -3,7 +3,7 @@ import bcrypt, sys, os, base64, datetime, hashlib, hmac
 import boto3, csv, json
 import requests
 from django.db import models
-from .models import User, Device, Event, Media
+from .models import User, Device, Event, Media, MediaComment
 client = boto3.client('s3') #low-level functional API
 resource = boto3.resource('s3') #high-level object-oriented API
 v1_raw_bucket = resource.Bucket('pi-1')
@@ -70,7 +70,7 @@ def updateDatabase(request):
                 data_type = "not a jpg/jpeg or mp4"
             Media.objects.create(
                 media_type = data_type,
-                link = data.key,
+                link = "https://s3.amazonaws.com/users-raw-content/" + data.key,
                 device_id = 1,
                 user_id = 1,
                 event_id = 1,
@@ -99,7 +99,7 @@ def updateDatabase(request):
                 data_type = "not a jpg/jpeg or mp4"
             Media.objects.create(
                 media_type = data_type,
-                link = data.key,
+                link = "https://s3.amazonaws.com/users-edited-content/" + data.key,
                 device_id = 1,
                 user_id = 1,
                 event_id = 1,

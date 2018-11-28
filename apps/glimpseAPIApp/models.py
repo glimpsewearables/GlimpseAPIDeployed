@@ -4,6 +4,7 @@ import re, bcrypt
 
 class User(models.Model):
     # UserId = models.IntegerField()
+    user_name = models.CharField(max_length = 45)
     first_name = models.CharField(max_length = 45)
     last_name = models.CharField(max_length = 45)
     email = models.CharField(max_length = 45)
@@ -47,6 +48,12 @@ class Media(models.Model):
 class UserEvent(models.Model):
     user_id = models.IntegerField(default=False)
     event_id = models.IntegerField(default=False)
+
+class MediaComment(models.Model):
+    user_id = models.IntegerField(default=False)
+    media_id = models.IntegerField(default=False)
+    comment = models.TextField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 def __str__(self):
         return '%s %s' % (self.title, self.body)

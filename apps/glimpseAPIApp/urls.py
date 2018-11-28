@@ -1,11 +1,12 @@
 from django.conf.urls import url, include
 from . import views, models
-from .resources import UserResource, EventResource, MediaResource, DeviceResource
+from .resources import UserResource, EventResource, MediaResource, DeviceResource, CommentResource
 
 user_resource = UserResource()
 event_resource = EventResource()
 media_resource = MediaResource()
 device_resource = DeviceResource()
+comment_resource = CommentResource()
 
 urlpatterns = [
     url(r'^$', views.index),
@@ -29,4 +30,6 @@ urlpatterns = [
     url(r'^api/', include(device_resource.urls)),
     url(r'^api/', include(media_resource.urls)),
     url(r'^api/', include(event_resource.urls)),
+    url(r'^api/', include(comment_resource.urls)),
+
 ]  
