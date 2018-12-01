@@ -3,13 +3,13 @@ import bcrypt, sys, os, base64, datetime, hashlib, hmac
 import boto3, csv, json
 import requests
 from django.db import models
-from .models import User, Device, Event, Media
+from .models import User, Device, Event, Media, MediaComment
 client = boto3.client('s3') #low-level functional API
 resource = boto3.resource('s3') #high-level object-oriented API
 v1_raw_bucket = resource.Bucket('pi-1')
 v1_edited_bucket = resource.Bucket('pi-2')
-v2_raw_bucket = resource.Bucket('pi-4')
-v2_edited_bucket = resource.Bucket('pi-5') 
+v2_raw_bucket = resource.Bucket('users-raw-content')
+v2_edited_bucket = resource.Bucket('users-edited-content') 
 
 # Initializing the database 
 # Only to be used once at the very beginning of launching the website to transfer all of the 
@@ -24,6 +24,7 @@ def updateDatabase(request):
         print("Initial User exists")
     else:
         User.objects.create(
+            # user_name = "glimpse",
             first_name = "glimpse",
             last_name = "project",
             email = "drose@glimpsewearables.com",
@@ -38,7 +39,7 @@ def updateDatabase(request):
         Device.objects.create(
             device_number = 1,
             serial_number = "1a2b3c4d5e6f7g",
-            UserId = User.objects.get(id=1)
+            user_id = 1
         )
     if(Event.objects.filter(id = 1)):
         print("Inital Event in database exists")
@@ -70,10 +71,10 @@ def updateDatabase(request):
                 data_type = "not a jpg/jpeg or mp4"
             Media.objects.create(
                 media_type = data_type,
-                link = data.key,
-                DeviceId = Device.objects.get(id=1),
-                UserId = User.objects.get(id=1),
-                event = Event.objects.get(id=1),
+                link = "https://s3.amazonaws.com/users-raw-content/" + data.key,
+                device_id = 0,
+                user_id = 0,
+                event_id = 0,
                 raw_or_edited = "raw"
             )
             print("adding new edited media with " + data.key + " as a the link")
@@ -99,10 +100,10 @@ def updateDatabase(request):
                 data_type = "not a jpg/jpeg or mp4"
             Media.objects.create(
                 media_type = data_type,
-                link = data.key,
-                DeviceId = Device.objects.last(),
-                UserId = User.objects.last(),
-                event = Event.objects.last(),
+                link = "https://s3.amazonaws.com/users-edited-content/" + data.key,
+                device_id = 0,
+                user_id = 0,
+                event_id = 0,
                 raw_or_edited = "edited"
             )
             print("adding new edited media with " + data.key + " as a the link")
@@ -148,10 +149,10 @@ def jsonifyMediaData(data):
     all_media = []
     for data_point in data:
         adding_context = {
-                "link" : "https://s3.amazonaws.com/pi-4/" + data_point.link,
-                "user_id" : data_point.UserId.id,
-                "device_id" : data_point.DeviceId.id,
-                "event_id" : data_point.event.id,
+                "link" : data_point.link,
+                "user_id" : str(data_point.user_id),
+                "device_id" : str(data_point.device_id),
+                "event_id" : str(data_point.event_id),
                 "media_type" : data_point.media_type,
                 "raw_or_edited" : data_point.raw_or_edited,
                 "downloaded" : data_point.downloaded,
@@ -188,7 +189,7 @@ def jsonifyDeviceData(data):
         adding_context = {
             "serial_number" : data_point.serial_number,
             "device_number" : data_point.device_number,
-            "user_id" : data_point.UserId.id,
+            "user_id" : data_point.user_id,
             "created_at" : str(data_point.created_at),
             "updated_at" : str(data_point.updated_at)
         }
@@ -242,27 +243,27 @@ def getAllVideos(request): # grabs ALL videos that are being stored in the raw b
     newContext = json.dumps(json_videos)
     return HttpResponse(newContext)
 
-def getAllUserImages(request, user_id): # grabs ALL images connected to the specific user that are being stored in the raw bucket
+def getAllUserMedia(request, userId): # grabs ALL images connected to the specific user that are being stored in the raw bucket
     context = {}
-    if User.objects.filter(id = user_id):
-        response = "Getting all images specific to user " + user_id + "..!! "
-        raw_images = Media.objects.filter(UserId = User.objects.get(id=user_id), media_type = "image", raw_or_edited = "raw")
-        edited_images = Media.objects.filter(UserId = User.objects.get(id=user_id), media_type = "image", raw_or_edited = "edited")
-        json_raw_images = jsonifyMediaData(raw_images)
-        json_edited_images = jsonifyMediaData(edited_images)
-        context["raw_images"] = json_raw_images
-        context["edited_images"] = json_edited_images
+    if User.objects.filter(id = userId):
+        response = "Getting all media specific to user " + userId + "..!! "
+        raw_media = Media.objects.filter(user_id = userId, raw_or_edited = "raw")
+        edited_media = Media.objects.filter(user_id= userId, raw_or_edited = "edited")
+        json_raw_media = jsonifyMediaData(raw_media)
+        json_edited_media = jsonifyMediaData(edited_media)
+        context["raw_media"] = json_raw_media
+        context["edited_media"] = json_edited_media
     else:
         context["error"] = "You entered a user that does not exist"
     newContext = json.dumps(context)
     return HttpResponse(newContext)
 
-def getAllUserVideos(request, user_id): # grabs ALL videos connected to the specific user that are being stored in the raw bucket
+def getAllUserVideos(request, userId): # grabs ALL videos connected to the specific user that are being stored in the raw bucket
     context = {}
-    if User.objects.filter(id = user_id):
+    if User.objects.filter(id = userId):
         response = "Getting all videos specific to a user..."
-        videos_raw = Media.objects.filter(UserId = User.objects.get(id = user_id), media_type = "video", raw_or_edited = "raw")
-        videos_edited = Media.objects.filter(UserId = User.objects.get(id = user_id), media_type = "video", raw_or_edited = "edited")
+        videos_raw = Media.objects.filter(user_id = User.objects.get(id = userId), media_type = "video", raw_or_edited = "raw")
+        videos_edited = Media.objects.filter(user_id = User.objects.get(id = userId), media_type = "video", raw_or_edited = "edited")
         json_raw_videos = jsonifyMediaData(videos_raw)
         json_edited_videos = jsonifyMediaData(videos_edited)
         context["raw_videos"] = json_raw_videos
@@ -272,22 +273,22 @@ def getAllUserVideos(request, user_id): # grabs ALL videos connected to the spec
     newContext = json.dumps(context)
     return HttpResponse(newContext)
 
-def getAllImagesUserEvent(request, user_id, event_id): # grabs all images for a specific user at a specific event
+def getAllImagesUserEvent(request, userId, eventId): # grabs all images for a specific user at a specific event
     context = {}
-    if Event.objects.filter(id = event_id) and User.objects.filter(id = user_id):
-        response = "Getting all images for a single user at a specific event with a event id of" + event_id
-        user_event_content = Media.objects.filter(event = Event.objects.get(id=event_id), UserId = User.objects.get(id=user_id), media_type="image")
+    if Event.objects.filter(id = eventId) and User.objects.filter(id = userId):
+        response = "Getting all images for a single user at a specific event with a event id of" + eventId
+        user_event_content = Media.objects.filter(event = Event.objects.get(id=eventId), user_id = User.objects.get(id=userd), media_type="image")
         context["user_event_content"] = user_event_content
     else:
         context["error"] = "You entered a user or event that does not exist"
     context.json()
     return HttpResponse(context)
 
-def getAllVideosUserEvent(request, user_id, event_id): # grabs all videos for a specific user at a specific event
+def getAllVideosUserEvent(request, userId, eventId): # grabs all videos for a specific user at a specific event
     context = {}
-    if Event.objects.filter(id = event_id) and User.objects.filter(id = user_id):
+    if Event.objects.filter(id = eventId) and User.objects.filter(id = userId):
         response = "Getting all videos for a single user at a specific event with a event id of" + event_id
-        user_event_content = Media.objects.filter(event = Event.objects.get(id=event_id), UserId = User.objects.get(id=user_id), media_type="video")
+        user_event_content = Media.objects.filter(event = Event.objects.get(id=eventId), user_id = User.objects.get(id=userId), media_type="video")
         context["user_event_content"] = user_event_content
     else:
         context["error"] = "You entered a user or event that does not exist"
