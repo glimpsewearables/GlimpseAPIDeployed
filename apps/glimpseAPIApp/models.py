@@ -46,8 +46,20 @@ class Media(models.Model):
     updated_at = models.DateTimeField(auto_now_add=True)
 
 class UserEvent(models.Model):
-    user_id = models.ForeignKey(User, related_name="user_at_events", null=True)
-    event_id = models.ForeignKey(Event, related_name="event_attending", null=True)
+    user_id = models.IntegerField(default=False)
+    event_id = models.IntegerField(default=False)
+
+class MediaComment(models.Model):
+    user_id = models.IntegerField(default=False)
+    media_id = models.IntegerField(default=False)
+    comment = models.TextField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class MediaLike(models.Model):
+    user_id = models.IntegerField(default=False)
+    media_id = models.IntegerField(default=False)
+    comment = models.TextField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 class MediaComment(models.Model):
     user_id = models.IntegerField(default=False)
