@@ -23,7 +23,7 @@ urlpatterns = [
     url(r'^media/getSpecificUser/(?P<user_id>\d+)$', views.getSpecificUser),
     url(r'^media/getSpecificUserByEmail/(?P<user_email>[\w.%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,4})/$', views.getSpecificUserByEmail),
     url(r'^media/getAllEvents$', views.getAllEvents),
-    url(r'^media/getSpecificEvent/(?P<event_id>\d+)$', views.getSpecificEvent),
+    url(r'^media/getSpecificEvent/(?P<eventId>\d+)$', views.getSpecificEvent),
     url(r'^media/getAllDevices$', views.getAllDevices),
     url(r'^media/getSpecificDevice/(?P<device_id>\d+)$', views.getSpecificDevice),
     # Api function calls 

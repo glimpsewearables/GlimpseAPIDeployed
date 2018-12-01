@@ -164,23 +164,18 @@ def jsonifyMediaData(data):
     context.update({"media" : all_media})
     return context
 
-def jsonifyEventData(data):
-    context = {}
-    all_events = []
-    for data_point in data:
-        adding_context = {
-                "name" : data_point.name,
-                "address" : data_point.address,
-                "start_date" : str(data_point.start_date),
-                "end_date" : str(data_point.end_date),
-                "long" : str(data_point.long),
-                "lat" : str(data_point.lat),
-                "created_at" : str(data_point.created_at),
-                "updated_at" : str(data_point.updated_at)
-            }
-        all_events.append(adding_context)
-    context.update({"events" : all_events})
-    return context
+def jsonifyEventData(data_point):
+    adding_context = {
+            "name" : data_point.name,
+            "address" : data_point.address,
+            "start_date" : str(data_point.start_date),
+            "end_date" : str(data_point.end_date),
+            "long" : str(data_point.long),
+            "lat" : str(data_point.lat),
+            "created_at" : str(data_point.created_at),
+            "updated_at" : str(data_point.updated_at)
+        }
+    return adding_context
 
 def jsonifyDeviceData(data):
     context = {}
@@ -308,19 +303,19 @@ def getAllEvents(request): # grabs ALL events from mysql database
     newContext = json.dumps(context)
     return HttpResponse(newContext)
 
-def getSpecificEvent(request, event_id): # grabs a specific event from the mySQL database
+def getSpecificEvent(request, eventId): # grabs a specific event from the mySQL database
     context = {}
-    if Event.objects.filter(id = event_id):
+    newContext = {}
+    if Event.objects.filter(id = eventId):
         response = "Getting a single specific event with a event id of"
-        context = {}
-        this_event = Event.objects.get(id = event_id)
-        this_event_content = Media.objects.filter(event = Event.objects.get(id=event_id))
-        context["this_event"] = this_event
-        context["this_event_content"] = this_event_content
+        this_event = Event.objects.get(id = eventId)
+        this_event_content = Media.objects.filter(event_id = eventId)
+        context["this_event"] = jsonifyEventData(this_event)
+        context["this_event_content"] = jsonifyMediaData(this_event_content)
+        newContext = json.dumps(context)
     else:
-        context["error"] = "You entered a event that does not exist"
-    context.json()
-    return HttpResponse(context)
+        newContext["error"] = "You entered a event that does not exist"
+    return HttpResponse(newContext)
 
 # all of the endpoint functions for retrieving device information
 def getAllDevices(request): # grabs a specific user from the mySQL database
