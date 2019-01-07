@@ -4,7 +4,7 @@ import re, bcrypt
 
 class User(models.Model):
     # UserId = models.IntegerField()
-    # user_name = models.CharField(max_length = 45)
+    user_name = models.CharField(max_length = 45)
     first_name = models.CharField(max_length = 45)
     last_name = models.CharField(max_length = 45)
     email = models.CharField(max_length = 45)
@@ -25,6 +25,7 @@ class Event(models.Model):
     # EventId = models.IntegerField()
     name = models.CharField(max_length = 245)
     address = models.CharField(max_length = 245)
+    # header_image = models.CharField(max_length = 245)
     start_date = models.DateTimeField(blank=True, null=True)
     end_date = models.DateTimeField(blank=True, null=True)
     long = models.DecimalField(max_digits=8, decimal_places=3)
@@ -44,6 +45,7 @@ class Media(models.Model):
     ranking = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now_add=True)
+    gif_link = models.CharField(max_length=245)
 
 class UserEvent(models.Model):
     user_id = models.IntegerField(default=False)

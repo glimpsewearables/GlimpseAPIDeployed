@@ -1,5 +1,5 @@
-from django.shortcuts import render, HttpResponse
-import bcrypt, sys, os, base64, datetime, hashlib, hmac 
+from django.shortcuts import render, HttpResponse, redirect
+import bcrypt, sys, os, base64, datetime, hashlib, hmac, pytz
 import boto3, csv, json
 import requests
 from django.db import models
@@ -17,6 +17,9 @@ v2_edited_bucket = resource.Bucket('users-edited-content')
 # to the api that we are using
 # Once the api is able to continually update the sql database every time an image is uploaded 
 # this function will never have to be run again
+
+
+
 def updateDatabase(request):
     thisUsersContentRaw = v2_raw_bucket.objects.filter()
     thisUsersContentEdited = v2_edited_bucket.objects.filter()
@@ -126,22 +129,19 @@ def createUser(first_name, last_name, email, password, phone):
         updated_at = datetime.time
     )
 
-def createEvent(name, address, start_date, end_date, long, lat):
+def createEvent(name, address, start_date, end_date, longitude, lat):
     print("creating a new event")
+    now = datetime.datetime.now(pytz.timezone('US/Pacific'))
     Event.objects.create(
         name = name,
         address = address,
         start_date = start_date,
         end_date = end_date,
-        long = long,
-        lat = lat
+        long = longitude,
+        lat = lat,
+        created_at = now,
+        updated_at = now
     )
-def updateEvent(): # figure out the put request to update an existing object within an API
-    print("updating an existing event")
-def createSingleMedia(): # this will occur every time a new url link is sent to the api from the device
-    print("creating a single media object")
-def updateSingleMedia(): # figure out the put request to update an existing object within an API
-    print("updating attributes of a single event")
 
 # Converting the object based data into json data that can be parsed and returned by the api
 def jsonifyMediaData(data):
@@ -158,7 +158,8 @@ def jsonifyMediaData(data):
                 "downloaded" : data_point.downloaded,
                 "ranking" : data_point.ranking,
                 "created_at" : str(data_point.created_at),
-                "updated_at" : str(data_point.updated_at)
+                "updated_at" : str(data_point.updated_at),
+                "gif_link" : data_point.gif_link
             }
         all_media.append(adding_context)
     context.update({"media" : all_media})
@@ -197,6 +198,7 @@ def jsonifyUserData(data):
     all_users = []
     for data_point in data:
         adding_context = {
+            "user_name" : data_point.user_name,
             "first_name" : data_point.first_name,
             "last_name" : data_point.last_name,
             "email" : data_point.email,
@@ -205,7 +207,8 @@ def jsonifyUserData(data):
             "created_at" : str(data_point.created_at),
             "updated_at" : str(data_point.updated_at)
         }
-        all_users.append({"users" : all_users})
+        all_users.append(adding_context)
+    context.update({"users" : all_users})
     return context
 
 
@@ -216,8 +219,71 @@ def jsonifyUserData(data):
 
 # all the endpoint functions for retrieving media information
 def index(request): # this is the standard endpoint that will not return anything
-    response = "here is the standard page that will be seen when the user enters the blank url"
-    return HttpResponse(response)
+    return render(request, "portal.html")
+
+def login(request):
+    if request.method=="POST":
+        device_number = request.POST['deviceNumber']
+        request.session["deviceNumber"] = device_number
+    return redirect("/userPage/" + device_number)
+
+def userPage(request, device_number):
+    this_device_content = Media.objects.filter(user_id = device_number)
+    all_events = Event.objects.all()
+    this_users_event_content = {}
+    this_users_event_content["all_my_events"] = {}
+    this_users_event_content["all_events"] = all_events
+    for event in all_events:
+        if this_device_content.filter(event_id = event.id):
+            all_content = this_device_content.filter(event_id = event.id)
+            this_images = this_device_content.filter(event_id = event.id, media_type = "image")
+            this_videos = this_device_content.filter(event_id = event.id, media_type = "video")
+            this_content = {
+                "images" : this_images, 
+                "videos" : this_videos
+            }
+            print("event " + str(event.id) + ", with content " + str(this_content))
+            this_users_event_content[event.id] = this_content
+    this_users_event_content["device_number"] = device_number
+    # this_users_event_content["media"] = this_device_content
+    return render(request, "userPage.html", this_users_event_content)
+
+def checkLogin():
+    if request.session["deviceNumber"]:
+        return True
+    else:
+        return False
+
+def adminLogin(request):
+    if request.method=="POST":
+        my_date = datetime.datetime.now(pytz.timezone('US/Pacific'))
+        adminName = request.POST['adminName']
+        adminPassword = request.POST['adminPassword']
+    return redirect('/adminPage')
+
+def adminPage(request):
+    all_images = Media.objects.filter(media_type = "image")
+    all_videos = Media.objects.filter(media_type = "video")
+    context = {
+        "image_number" : len(all_images), 
+        "all_videos" : all_videos,
+        "video_number" : len(all_videos),
+        "all_users" : User.objects.all(),
+        "all_events" : Event.objects.all(),
+        "event_number" :len(Event.objects.all()),
+        "all_devices" : Device.objects.all(),
+        "device_number" : len(Device.objects.all())
+    }
+    return render(request, "adminPage.html", context)
+def viewEventMedia(request, event_id):
+    context = {}
+    this_event = Event.objects.get(id = event_id)
+    this_event_images = Media.objects.filter(event_id = event_id, media_type = "image")
+    this_event_videos = Media.objects.filter(event_id = event_id, media_type = "video")
+    context["this_event"] = this_event
+    context["this_event_images"] = this_event_images
+    context["this_event_videos"] = this_event_videos
+    return render(request, "viewMedia.html", context)
 
 def mediaHome(request):
     response = "here is the home page from the media application portion of the api"
@@ -228,7 +294,7 @@ def getAllImages(request): # grabs ALL images that are being stored in the raw b
     all_images = Media.objects.filter(media_type = "image")
     json_images = jsonifyMediaData(all_images)
     newContext = json.dumps(json_images)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
     # return json(json_images)
 
 def getAllVideos(request): # grabs ALL videos that are being stored in the raw bucket
@@ -236,7 +302,7 @@ def getAllVideos(request): # grabs ALL videos that are being stored in the raw b
     all_videos = Media.objects.filter(media_type = "video")
     json_videos = jsonifyMediaData(all_videos)
     newContext = json.dumps(json_videos)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 def getAllUserMedia(request, userId): # grabs ALL images connected to the specific user that are being stored in the raw bucket
     context = {}
@@ -251,14 +317,14 @@ def getAllUserMedia(request, userId): # grabs ALL images connected to the specif
     else:
         context["error"] = "You entered a user that does not exist"
     newContext = json.dumps(context)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 def getAllUserVideos(request, userId): # grabs ALL videos connected to the specific user that are being stored in the raw bucket
     context = {}
     if User.objects.filter(id = userId):
         response = "Getting all videos specific to a user..."
-        videos_raw = Media.objects.filter(user_id = User.objects.get(id = userId), media_type = "video", raw_or_edited = "raw")
-        videos_edited = Media.objects.filter(user_id = User.objects.get(id = userId), media_type = "video", raw_or_edited = "edited")
+        videos_raw = Media.objects.filter(user_id = userId, media_type = "video", raw_or_edited = "raw")
+        videos_edited = Media.objects.filter(user_id = userId, media_type = "video", raw_or_edited = "edited")
         json_raw_videos = jsonifyMediaData(videos_raw)
         json_edited_videos = jsonifyMediaData(videos_edited)
         context["raw_videos"] = json_raw_videos
@@ -266,29 +332,29 @@ def getAllUserVideos(request, userId): # grabs ALL videos connected to the speci
     else:
         context["error"] = "You entered a user that does not exist"
     newContext = json.dumps(context)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 def getAllImagesUserEvent(request, userId, eventId): # grabs all images for a specific user at a specific event
     context = {}
-    if Event.objects.filter(id = eventId) and User.objects.filter(id = userId):
+    if Event.objects.filter(id = eventId) and Device.objects.filter(id = userId):
         response = "Getting all images for a single user at a specific event with a event id of" + eventId
-        user_event_content = Media.objects.filter(event = Event.objects.get(id=eventId), user_id = User.objects.get(id=userd), media_type="image")
-        context["user_event_content"] = user_event_content
+        user_event_images = Media.objects.filter(event_id = eventId, user_id = userId, media_type="image")
+        json_user_event_images = jsonifyMediaData(user_event_images)
+        context["user_event_images"] = json_user_event_images
     else:
         context["error"] = "You entered a user or event that does not exist"
-    context.json()
-    return HttpResponse(context)
+    return HttpResponse(json.dumps(context), content_type="application/json")
 
 def getAllVideosUserEvent(request, userId, eventId): # grabs all videos for a specific user at a specific event
     context = {}
-    if Event.objects.filter(id = eventId) and User.objects.filter(id = userId):
-        response = "Getting all videos for a single user at a specific event with a event id of" + event_id
-        user_event_content = Media.objects.filter(event = Event.objects.get(id=eventId), user_id = User.objects.get(id=userId), media_type="video")
-        context["user_event_content"] = user_event_content
+    if Event.objects.filter(id = eventId) and Device.objects.filter(id = userId):
+        response = "Getting all videos for a single user at a specific event with a event id of" + eventId
+        user_event_videos = Media.objects.filter(event_id = eventId, user_id = userId, media_type="video")
+        json_user_event_videos = jsonifyMediaData(user_event_videos)
+        context["user_event_videos"] = json_user_event_videos
     else:
         context["error"] = "You entered a user or event that does not exist"
-    context.json()
-    return HttpResponse(context)
+    return HttpResponse(json.dumps(context), content_type="application/json")
 
 # all of the endpoint functions for retrieving event information
 def getAllEvents(request): # grabs ALL events from mysql database
@@ -301,7 +367,7 @@ def getAllEvents(request): # grabs ALL events from mysql database
     context["all_images"] = jsonifyMediaData(all_images)
     context["all_videos"] = jsonifyMediaData(all_videos)
     newContext = json.dumps(context)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 def getSpecificEvent(request, eventId): # grabs a specific event from the mySQL database
     context = {}
@@ -315,14 +381,14 @@ def getSpecificEvent(request, eventId): # grabs a specific event from the mySQL 
         newContext = json.dumps(context)
     else:
         newContext["error"] = "You entered a event that does not exist"
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 # all of the endpoint functions for retrieving device information
 def getAllDevices(request): # grabs a specific user from the mySQL database
     all_devices = Device.objects.all()
     context = jsonifyDeviceData(all_devices)
     newContext = json.dumps(context)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 def getSpecificDevice(request, device_id): # grabs all users from the mySQL database
     context = {}
@@ -332,14 +398,14 @@ def getSpecificDevice(request, device_id): # grabs all users from the mySQL data
     else:
         context["error"] = "You entered a device that does not exist"
     newContext = json.dumps(context)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 # all of the endpoint functions for retrieving user information
 def getAllUsers(request): # grabs a specific user from the mySQL database
     all_users = User.objects.all()
     context = jsonifyUserData(all_users)
     newContext = json.dumps(context)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 def getSpecificUser(request, user_id): # grabs all users from the mySQL database
     context = {}
@@ -349,7 +415,7 @@ def getSpecificUser(request, user_id): # grabs all users from the mySQL database
     else:
         context["error"] = "You entered a user that does not exist"
     newContext = json.dumps(context)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
 
 def getSpecificUserByEmail(request, user_email):
     context = {}
@@ -359,4 +425,4 @@ def getSpecificUserByEmail(request, user_email):
     else:
         context["error"] = "You entered a user that does not exist"
     newContext = json.dumps(context)
-    return HttpResponse(newContext)
+    return HttpResponse(newContext, content_type="application/json")
