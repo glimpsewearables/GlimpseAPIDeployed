@@ -17,10 +17,8 @@ v2_edited_bucket = resource.Bucket('users-edited-content')
 # to the api that we are using
 # Once the api is able to continually update the sql database every time an image is uploaded 
 # this function will never have to be run again
-
-
-
 def updateDatabase(request):
+    request.session["currentEventId"] = 0
     thisUsersContentRaw = v2_raw_bucket.objects.filter()
     thisUsersContentEdited = v2_edited_bucket.objects.filter()
     if (User.objects.filter(id = 1)):
@@ -74,7 +72,7 @@ def updateDatabase(request):
                 data_type = "not a jpg/jpeg or mp4"
             Media.objects.create(
                 media_type = data_type,
-                link = "https://s3.amazonaws.com/users-raw-content/" + data.key,
+                link = "https://s3-us-west-2.amazonaws.com/users-raw-content/" + data.key,
                 device_id = 0,
                 user_id = 0,
                 event_id = 0,
@@ -112,179 +110,38 @@ def updateDatabase(request):
             print("adding new edited media with " + data.key + " as a the link")
     return HttpResponse(thisUsersContentRaw)
 
+# The link to certain urls has been changing, this is where you can update the links
+def checkUrls(request):
+    allMedia =  Media.objects.all()
+    startingLink = 'https://s3-us-west-2.'
+    for media in allMedia:
+        oldLink = media.link
+        oldId = media.id
+        if oldLink.startswith('https://s3.'):
+            newLink = startingLink + oldLink[11:]
+            old = Media.objects.filter(id = oldId)
+            old.link = newLink
+            old.save()
+            print newLink + " is the new link"
+        else:
+            print "good link"
+    return redirect("/")
 
+def removeDuplicates(request):
+    allMedia =  Media.objects.all()
+    for media in allMedia:
+        if allMedia.filter(link = media.link):
 
-# All of the endpoints for pushing information from the api call
-# functions divider
-# functions divider
-# functions divider
-def createUser(first_name, last_name, email, password, phone):
-    User.objects.create(
-        first_name = first_name,
-        last_name = last_name,
-        email = email,
-        phone = phone,
-        password = password,
-        created_at = datetime.time,
-        updated_at = datetime.time
-    )
+            print "duplicate"
+        else:
+            print "not a duplicate"
+    return redirect("/")
 
-def createEvent(name, address, start_date, end_date, longitude, lat):
-    print("creating a new event")
-    now = datetime.datetime.now(pytz.timezone('US/Pacific'))
-    Event.objects.create(
-        name = name,
-        address = address,
-        start_date = start_date,
-        end_date = end_date,
-        long = longitude,
-        lat = lat,
-        created_at = now,
-        updated_at = now
-    )
-
-# Converting the object based data into json data that can be parsed and returned by the api
-def jsonifyMediaData(data):
-    context = {}
-    all_media = []
-    for data_point in data:
-        adding_context = {
-                "link" : data_point.link,
-                "user_id" : str(data_point.user_id),
-                "device_id" : str(data_point.device_id),
-                "event_id" : str(data_point.event_id),
-                "media_type" : data_point.media_type,
-                "raw_or_edited" : data_point.raw_or_edited,
-                "downloaded" : data_point.downloaded,
-                "ranking" : data_point.ranking,
-                "created_at" : str(data_point.created_at),
-                "updated_at" : str(data_point.updated_at),
-                "gif_link" : data_point.gif_link
-            }
-        all_media.append(adding_context)
-    context.update({"media" : all_media})
-    return context
-
-def jsonifyEventData(data_point):
-    adding_context = {
-            "name" : data_point.name,
-            "address" : data_point.address,
-            "start_date" : str(data_point.start_date),
-            "end_date" : str(data_point.end_date),
-            "long" : str(data_point.long),
-            "lat" : str(data_point.lat),
-            "created_at" : str(data_point.created_at),
-            "updated_at" : str(data_point.updated_at)
-        }
-    return adding_context
-
-def jsonifyDeviceData(data):
-    context = {}
-    all_events = []
-    for data_point in data:
-        adding_context = {
-            "serial_number" : data_point.serial_number,
-            "device_number" : data_point.device_number,
-            "user_id" : data_point.user_id,
-            "created_at" : str(data_point.created_at),
-            "updated_at" : str(data_point.updated_at)
-        }
-        all_events.append(adding_context)
-    context.update({"devices" : all_events})
-    return context
-
-def jsonifyUserData(data):
-    context = {}
-    all_users = []
-    for data_point in data:
-        adding_context = {
-            "user_name" : data_point.user_name,
-            "first_name" : data_point.first_name,
-            "last_name" : data_point.last_name,
-            "email" : data_point.email,
-            "phone" : data_point.phone,
-            "password" : data_point.password,
-            "created_at" : str(data_point.created_at),
-            "updated_at" : str(data_point.updated_at)
-        }
-        all_users.append(adding_context)
-    context.update({"users" : all_users})
-    return context
-
-
+def logout(request):
+    request.session["userType"] = None
+    request.session["deviceNumber"] = None
+    return redirect("/")
 # All of the endpoints for retrieving information from the api call
-# functions divider
-# functions divider
-# functions divider
-
-# all the endpoint functions for retrieving media information
-def index(request): # this is the standard endpoint that will not return anything
-    return render(request, "portal.html")
-
-def login(request):
-    if request.method=="POST":
-        device_number = request.POST['deviceNumber']
-        request.session["deviceNumber"] = device_number
-    return redirect("/userPage/" + device_number)
-
-def userPage(request, device_number):
-    this_device_content = Media.objects.filter(user_id = device_number)
-    all_events = Event.objects.all()
-    this_users_event_content = {}
-    this_users_event_content["all_my_events"] = {}
-    this_users_event_content["all_events"] = all_events
-    for event in all_events:
-        if this_device_content.filter(event_id = event.id):
-            all_content = this_device_content.filter(event_id = event.id)
-            this_images = this_device_content.filter(event_id = event.id, media_type = "image")
-            this_videos = this_device_content.filter(event_id = event.id, media_type = "video")
-            this_content = {
-                "images" : this_images, 
-                "videos" : this_videos
-            }
-            print("event " + str(event.id) + ", with content " + str(this_content))
-            this_users_event_content[event.id] = this_content
-    this_users_event_content["device_number"] = device_number
-    # this_users_event_content["media"] = this_device_content
-    return render(request, "userPage.html", this_users_event_content)
-
-def checkLogin():
-    if request.session["deviceNumber"]:
-        return True
-    else:
-        return False
-
-def adminLogin(request):
-    if request.method=="POST":
-        my_date = datetime.datetime.now(pytz.timezone('US/Pacific'))
-        adminName = request.POST['adminName']
-        adminPassword = request.POST['adminPassword']
-    return redirect('/adminPage')
-
-def adminPage(request):
-    all_images = Media.objects.filter(media_type = "image")
-    all_videos = Media.objects.filter(media_type = "video")
-    context = {
-        "image_number" : len(all_images), 
-        "all_videos" : all_videos,
-        "video_number" : len(all_videos),
-        "all_users" : User.objects.all(),
-        "all_events" : Event.objects.all(),
-        "event_number" :len(Event.objects.all()),
-        "all_devices" : Device.objects.all(),
-        "device_number" : len(Device.objects.all())
-    }
-    return render(request, "adminPage.html", context)
-def viewEventMedia(request, event_id):
-    context = {}
-    this_event = Event.objects.get(id = event_id)
-    this_event_images = Media.objects.filter(event_id = event_id, media_type = "image")
-    this_event_videos = Media.objects.filter(event_id = event_id, media_type = "video")
-    context["this_event"] = this_event
-    context["this_event_images"] = this_event_images
-    context["this_event_videos"] = this_event_videos
-    return render(request, "viewMedia.html", context)
-
 def mediaHome(request):
     response = "here is the home page from the media application portion of the api"
     return HttpResponse(response)
@@ -426,3 +283,71 @@ def getSpecificUserByEmail(request, user_email):
         context["error"] = "You entered a user that does not exist"
     newContext = json.dumps(context)
     return HttpResponse(newContext, content_type="application/json")
+
+# Converting the object based data into json data that can be parsed and returned by the api
+def jsonifyMediaData(data):
+    context = {}
+    all_media = []
+    for data_point in data:
+        adding_context = {
+                "link" : data_point.link,
+                "user_id" : str(data_point.user_id),
+                "device_id" : str(data_point.device_id),
+                "event_id" : str(data_point.event_id),
+                "media_type" : data_point.media_type,
+                "raw_or_edited" : data_point.raw_or_edited,
+                "downloaded" : data_point.downloaded,
+                "ranking" : data_point.ranking,
+                "created_at" : str(data_point.created_at),
+                "updated_at" : str(data_point.updated_at),
+                "gif_link" : data_point.gif_link
+            }
+        all_media.append(adding_context)
+    context.update({"media" : all_media})
+    return context
+
+def jsonifyEventData(data_point):
+    adding_context = {
+            "name" : data_point.name,
+            "address" : data_point.address,
+            "start_date" : str(data_point.start_date),
+            "end_date" : str(data_point.end_date),
+            "long" : str(data_point.long),
+            "lat" : str(data_point.lat),
+            "created_at" : str(data_point.created_at),
+            "updated_at" : str(data_point.updated_at)
+        }
+    return adding_context
+
+def jsonifyDeviceData(data):
+    context = {}
+    all_events = []
+    for data_point in data:
+        adding_context = {
+            "serial_number" : data_point.serial_number,
+            "device_number" : data_point.device_number,
+            "user_id" : data_point.user_id,
+            "created_at" : str(data_point.created_at),
+            "updated_at" : str(data_point.updated_at)
+        }
+        all_events.append(adding_context)
+    context.update({"devices" : all_events})
+    return context
+
+def jsonifyUserData(data):
+    context = {}
+    all_users = []
+    for data_point in data:
+        adding_context = {
+            "user_name" : data_point.user_name,
+            "first_name" : data_point.first_name,
+            "last_name" : data_point.last_name,
+            "email" : data_point.email,
+            "phone" : data_point.phone,
+            "password" : data_point.password,
+            "created_at" : str(data_point.created_at),
+            "updated_at" : str(data_point.updated_at)
+        }
+        all_users.append(adding_context)
+    context.update({"users" : all_users})
+    return context
