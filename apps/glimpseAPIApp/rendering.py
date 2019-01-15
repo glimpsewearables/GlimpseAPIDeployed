@@ -42,13 +42,19 @@ def userPage(request, device_number):
             this_id = event.event_id
             if this_device_content.filter(event_id = event.event_id):
                 allTheseVideos = this_device_content.filter(event_id = this_id)
-                # partedVideos = partitionVideos(request, this_id, device_number)
-                # print partedVideos
+                partedVideos = partitionVideos(request, this_id, device_number)
+                print partedVideos
                 this_users_event_content["event" + str(this_id)] = {
-                    "videos" : this_device_content.filter(event_id = this_id),
+                    "videos" : partedVideos,
                     "eventInfo" : event,
                     "numVids" : len(allTheseVideos)
-                    }
+                }
+                # Working code
+                # this_users_event_content["event" + str(this_id)] = {
+                #     "videos" : this_device_content.filter(event_id = this_id),
+                #     "eventInfo" : event,
+                #     "numVids" : len(allTheseVideos)
+                # }
                 this_users_event_content["my_events"].append(event.event_id)
         return render(request, "userPage.html", this_users_event_content)
 
@@ -61,11 +67,11 @@ def partitionVideos(request, event_id, device_id):
     for video in allVideos:
         all_videos.append(video.link)
     for i in range(0, (len(all_videos) / 9) + 1):
-        groupedVideos["video" + str(i)] = []
+        groupedVideos["videos" + str(i)] = []
     section = 0
     for i in range(0, len(all_videos)):
-        groupedVideos["video" + str(section)].append(all_videos[i])
-        if i % 9 == 0:
+        groupedVideos["videos" + str(section)].append(all_videos[i])
+        if i % 9 == 0 and i != 0:
             section += 1
     return groupedVideos
 
