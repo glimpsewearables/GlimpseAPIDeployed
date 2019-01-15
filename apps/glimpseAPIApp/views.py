@@ -1,6 +1,7 @@
 from django.shortcuts import render, HttpResponse, redirect
+from datetime import datetime
 import bcrypt, sys, os, base64, datetime, hashlib, hmac, pytz
-import boto3, csv, json
+import boto3, csv, json, wget, inspect, urllib, tinys3
 import requests
 from django.db import models
 from .models import User, Device, Event, Media, MediaComment
@@ -17,15 +18,50 @@ v2_edited_bucket = resource.Bucket('users-edited-content')
 # to the api that we are using
 # Once the api is able to continually update the sql database every time an image is uploaded 
 # this function will never have to be run again
+def fromDatabase(request):
+    allMedia = Media.objects.all() 
+    myFields = ['media_id', 'user_id', 'device_id', 'event_id', 'link', 'date', 'date_time', 'views', 'starred', 'media_type', 'raw_or_edited', 'downloaded', 'ranking', 'created_at', 'updated_at', 'gif_link']  
+    response = HttpResponse(content_type='text/csv')
+    today = datetime.date.today()
+    response['Content-Disposition'] = 'attachment; filename="glimpseMetrics.csv"'
+    writer = csv.writer(response)
+    writer.writerow(myFields)
+    for data_point in allMedia:
+        adding_context = [
+            data_point.id,
+            str(data_point.user_id),
+            str(data_point.device_id),
+            str(data_point.event_id),
+            data_point.link,
+            data_point.date,
+            data_point.date_time,
+            data_point.views,
+            data_point.starred,
+            data_point.media_type,
+            data_point.raw_or_edited,
+            data_point.downloaded,
+            data_point.ranking,
+            str(data_point.created_at),
+            str(data_point.updated_at),
+            data_point.gif_link
+        ]
+        writer.writerow(adding_context)
+    return response
+    # return redirect('/adminPage')
+
+# def downloadCsv(request):
+
+
+
 def updateDatabase(request):
-    request.session["currentEventId"] = 0
+    request.session["currentEventId"] = 1
     thisUsersContentRaw = v2_raw_bucket.objects.filter()
     thisUsersContentEdited = v2_edited_bucket.objects.filter()
     if (User.objects.filter(id = 1)):
         print("Initial User exists")
     else:
         User.objects.create(
-            # user_name = "glimpse",
+            user_name = "glimpseTesting",
             first_name = "glimpse",
             last_name = "project",
             email = "drose@glimpsewearables.com",
@@ -34,80 +70,151 @@ def updateDatabase(request):
             created_at = datetime.time,
             updated_at = datetime.time
         )
-    if(Device.objects.filter(id = 1)):
+    if(Device.objects.filter(id = 2)):
         print("Inital Device exists")
     else:
-        Device.objects.create(
-            device_number = 1,
-            serial_number = "1a2b3c4d5e6f7g",
-            user_id = 1
-        )
+        for i in range (1, 10):
+            Device.objects.create(
+                device_number = i,
+                serial_number = str(i) + "a" + str(i) + "b" + str(i) + "c",
+                user_id = i
+            )
     if(Event.objects.filter(id = 1)):
         print("Inital Event in database exists")
     else:
         Event.objects.create(
-            name = "glimpsewearables concert",
+            name = "Glimpse Testing",
+            event_id = 1,
             lat = 47.6062,
             long = 122.3321,
             address = "4637 21st Ave NE",
+            header_image = "https://s3-us-west-2.amazonaws.com/users-edited-content/headerImages/seattle.jpg"
+        )
+        Event.objects.create(
+            name = "Bumbershoot Festival",
+            event_id = 2,
+            lat = 47.6062,
+            long = 122.3321,
+            address = "Seattle City Center",
+            start_date = "2018-08-31",
+            end_date = "2018-09-03",
+            header_image = "https://s3-us-west-2.amazonaws.com/users-edited-content/headerImages/bumbershoot-festival.jpg"
+        )
+        Event.objects.create(
+            name = "Louis The Child",
+            event_id = 3,
+            lat = 47.6062,
+            long = 122.3321,
+            address = "Seattle City Center",
+            start_date = "2018-12-01",
+            end_date = "2018-12-01",
+            header_image = "https://s3-us-west-2.amazonaws.com/users-edited-content/headerImages/louisTheChildHeaderImage.jpg"
         )
     # This function is the most important for updating the database, checking to see if all of the images
     # that are in the s3 database are accounted for in the sql database
     for data in thisUsersContentRaw:
-        if Media.objects.filter(link = data.key):
+        urlHeader = "https://s3-us-west-2.amazonaws.com/users-raw-content/"
+        linkCheck = urlHeader + data.key
+        if Media.objects.filter(link = linkCheck):
             print(data.key + "data.key already exists")
+        elif not data.key.endswith(".jpg") and not data.key.endswith(".mp4"):
+            print("data key is not a proper link")
         else:
-            # If else statement that helps decide whether or not this media type is a image or video
-            check_image_video = data.key.lower()
-            data_type = ""
-            if check_image_video.endswith(".jpg") or check_image_video.endswith(".jpeg") or check_image_video.endswith(".png"):
-                print("it is an image")
-                data_type = "image"
-            elif check_image_video.endswith(".mp4"):
-                print("it is a video")
-                data_type = "video"
-            elif check_image_video.endswith("/"):
-                data_type = "this is a folder"
-            else:
-                data_type = "not a jpg/jpeg or mp4"
+            splitLink = data.key.split("_")
+            userId = 0
+            media_type = "neither"
+            dateOf = "not given"
+            dateTimeOf = "not given"
+            event_id = 1
+            for part in splitLink:
+                if part.startswith("user"):
+                    newPart = part.split("user")
+                    userId = newPart[1]
+                elif part == "image" or part == "video":
+                    media_type = part
+                elif part.startswith("201"):
+                    dateOf = part
+                elif part.endswith(".jpg") or part.endswith(".jpeg"):
+                    endingPart = part.split(".jpg")
+                    dateTimeOf = endingPart[0]
+                elif part.endswith(".mp4"):
+                    endingPart = part.split(".mp4")
+                    dateTimeOf = endingPart[0]
+            if dateOf == "2018-12-01":
+                event_id = 3
+            elif dateOf =="2018-08-31" or dateOf == "2018-09-01" or dateOf =="2018-09-02":
+                event_id = 2
+        # If else statement that helps decide whether or not this media type is a image or video
             Media.objects.create(
-                media_type = data_type,
+                user_id = int(userId),
+                device_id = int(userId),
+                event_id = event_id,
+                media_type = media_type,
                 link = "https://s3-us-west-2.amazonaws.com/users-raw-content/" + data.key,
-                device_id = 0,
-                user_id = 0,
-                event_id = 0,
-                raw_or_edited = "raw"
+                raw_or_edited = "raw",
+                downloaded = 0,
+                ranking = 1,
+                created_at = datetime.datetime.now(),
+                updated_at = datetime.datetime.now(),
+                gif_link = "",
+                views = 0,
+                starred = 0,
+                date = dateOf,
+                date_time = dateTimeOf
             )
-            print("adding new edited media with " + data.key + " as a the link")
     # This function is the most important for updating the database, checking to see if all of the images
     # that are in the s3 database are accounted for in the sql database
     for data in thisUsersContentEdited:
-        if Media.objects.filter(link = data.key):
+        urlHeader = "https://s3-us-west-2.amazonaws.com/users-edited-content/"
+        linkCheck = urlHeader + data.key
+        if Media.objects.filter(link = linkCheck):
             print(data.key + "data.key already exists")
+        elif not data.key.endswith(".jpg") and not data.key.endswith(".mp4"):
+            print("data key is not a proper link")
         else:
-            # If else statement that helps decide whether or not this media type is a image or video
-            # Reuse this function for adding image to database every time a new image is uploaded to the s3 database
-            check_image_video = data.key.lower()
-            data_type = ""
-            if check_image_video.endswith(".jpg") or check_image_video.endswith(".jpeg") or check_image_video.endswith(".png"):
-                print("it is an image")
-                data_type = "image"
-            elif check_image_video.endswith(".mp4"):
-                print("it is a video")
-                data_type = "video"
-            elif check_image_video.endswith("/"):
-                data_type = "this is a folder"
-            else:
-                data_type = "not a jpg/jpeg or mp4"
-            Media.objects.create(
-                media_type = data_type,
-                link = "https://s3.amazonaws.com/users-edited-content/" + data.key,
-                device_id = 0,
-                user_id = 0,
-                event_id = 0,
-                raw_or_edited = "edited"
-            )
-            print("adding new edited media with " + data.key + " as a the link")
+            splitLink = data.key.split("_")
+            if "user" in splitLink:
+                userId = ""
+                media_type = ""
+                dateOf = ""
+                dateTimeOf = ""
+                event_id = 1
+                for part in splitLink:
+                    if part.startswith("user"):
+                        newPart = part.split("user")
+                        userId = newPart[1]
+                    elif part == "image" or part == "video":
+                        media_type = part
+                    elif part.startswith("201"):
+                        dateOf = part
+                    elif part.endswith(".jpg") or part.endswith(".jpeg"):
+                        endingPart = part.split(".jpg")
+                        dateTimeOf = endingPart[0]
+                    elif part.endswith(".mp4"):
+                        endingPart = part.split(".mp4")
+                        dateTimeOf = endingPart[0]
+                # If else statement that helps decide whether or not this media type is a image or video
+                if dateOf == "2018-12-01":
+                    event_id = 3
+                elif dateOf =="2018-08-31" or dateOf == "2018-09-01" or dateOf =="2018-09-02":
+                    event_id = 2
+                Media.objects.create(
+                    user_id = int(userId),
+                    device_id = int(userId),
+                    event_id = event_id,
+                    media_type = media_type,
+                    link = "https://s3-us-west-2.amazonaws.com/users-edited-content/" + data.key,
+                    raw_or_edited = "edited",
+                    downloaded = 0,
+                    ranking = 1,
+                    created_at = datetime.datetime.now(),
+                    updated_at = datetime.datetime.now(),
+                    gif_link = "",
+                    views = 0,
+                    starred = 0,
+                    date = dateOf,
+                    date_time = dateTimeOf
+                )
     return HttpResponse(thisUsersContentRaw)
 
 # The link to certain urls has been changing, this is where you can update the links
@@ -131,7 +238,6 @@ def removeDuplicates(request):
     allMedia =  Media.objects.all()
     for media in allMedia:
         if allMedia.filter(link = media.link):
-
             print "duplicate"
         else:
             print "not a duplicate"
@@ -290,33 +396,40 @@ def jsonifyMediaData(data):
     all_media = []
     for data_point in data:
         adding_context = {
-                "link" : data_point.link,
-                "user_id" : str(data_point.user_id),
-                "device_id" : str(data_point.device_id),
-                "event_id" : str(data_point.event_id),
-                "media_type" : data_point.media_type,
-                "raw_or_edited" : data_point.raw_or_edited,
-                "downloaded" : data_point.downloaded,
-                "ranking" : data_point.ranking,
-                "created_at" : str(data_point.created_at),
-                "updated_at" : str(data_point.updated_at),
-                "gif_link" : data_point.gif_link
-            }
+            "views" : data_point.views,
+            "starred" : data_point.starred,
+            "link" : data_point.link,
+            "user_id" : str(data_point.user_id),
+            "device_id" : str(data_point.device_id),
+            "event_id" : str(data_point.event_id),
+            "media_type" : data_point.media_type,
+            "raw_or_edited" : data_point.raw_or_edited,
+            "downloaded" : data_point.downloaded,
+            "ranking" : data_point.ranking,
+            "created_at" : str(data_point.created_at),
+            "updated_at" : str(data_point.updated_at),
+            "gif_link" : data_point.gif_link,
+            "date": data_point.date,
+            "date_time": data_point.date_time
+        }
         all_media.append(adding_context)
     context.update({"media" : all_media})
     return context
 
 def jsonifyEventData(data_point):
     adding_context = {
-            "name" : data_point.name,
-            "address" : data_point.address,
-            "start_date" : str(data_point.start_date),
-            "end_date" : str(data_point.end_date),
-            "long" : str(data_point.long),
-            "lat" : str(data_point.lat),
-            "created_at" : str(data_point.created_at),
-            "updated_at" : str(data_point.updated_at)
-        }
+        "event_id" : data_point.event_id,
+        "name" : data_point.name,
+        "header_image": data_point.header_image,
+        "address" : data_point.address,
+        "start_date" : str(data_point.start_date),
+        "end_date" : str(data_point.end_date),
+        "header_image": str(data_point.header_image),
+        "long" : str(data_point.long),
+        "lat" : str(data_point.lat),
+        "created_at" : str(data_point.created_at),
+        "updated_at" : str(data_point.updated_at)
+    }
     return adding_context
 
 def jsonifyDeviceData(data):

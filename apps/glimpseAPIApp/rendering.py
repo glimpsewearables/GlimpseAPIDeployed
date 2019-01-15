@@ -28,8 +28,8 @@ def userPage(request, device_number):
         return redirect("/")
     else:
         this_device_content = Media.objects.filter(user_id = device_number, media_type = "video").order_by('created_at')
-        all_events = Event.objects.all().order_by('created_at').reverse()
-        most_recent = this_device_content.order_by('-id')[:9]
+        all_events = Event.objects.all().order_by('id').reverse()
+        most_recent = this_device_content.order_by('-date', "-date_time")[:9]
         this_users_event_content = {}
         this_users_event_content["all_events"] = all_events
         this_users_event_content["my_events"] = []
@@ -39,10 +39,35 @@ def userPage(request, device_number):
         this_users_event_content["last_video"] = this_device_content[:1]
         this_users_event_content["userType"] = request.session["userType"]
         for event in all_events:
-            if this_device_content.filter(event_id = event.id):
-                this_users_event_content["event" + str(event.id)] = {"videos": this_device_content.filter(event_id = event.id)}
-                this_users_event_content["my_events"].append(event.id)
+            this_id = event.event_id
+            if this_device_content.filter(event_id = event.event_id):
+                allTheseVideos = this_device_content.filter(event_id = this_id)
+                # partedVideos = partitionVideos(request, this_id, device_number)
+                # print partedVideos
+                this_users_event_content["event" + str(this_id)] = {
+                    "videos" : this_device_content.filter(event_id = this_id),
+                    "eventInfo" : event,
+                    "numVids" : len(allTheseVideos)
+                    }
+                this_users_event_content["my_events"].append(event.event_id)
         return render(request, "userPage.html", this_users_event_content)
+
+
+# Break up all of the videos into segments of nine in order to deal with rendering issues for massive ammounts of videos in html
+def partitionVideos(request, event_id, device_id):
+    allVideos = Media.objects.filter(device_id = device_id, event_id = event_id, media_type = "video")
+    all_videos = []
+    groupedVideos = {}
+    for video in allVideos:
+        all_videos.append(video.link)
+    for i in range(0, (len(all_videos) / 9) + 1):
+        groupedVideos["video" + str(i)] = []
+    section = 0
+    for i in range(0, len(all_videos)):
+        groupedVideos["video" + str(section)].append(all_videos[i])
+        if i % 9 == 0:
+            section += 1
+    return groupedVideos
 
 def checkLogin():
     if request.session["deviceNumber"]:
@@ -65,9 +90,11 @@ def adminPage(request):
         return redirect("/")
     else:
         all_images = Media.objects.filter(media_type = "image")
-        all_videos = Media.objects.filter(media_type = "video").order_by('created_at').reverse()
+        all_videos = Media.objects.filter(media_type = "video").order_by('-date', "-date_time")
+        if 'currentEventId' not in request.session:
+            request.session["currentEventId"] = 1
         currentEvent = Event.objects.get(id = request.session["currentEventId"])
-        last_video = all_videos.last()
+        last_video = all_videos.first()
         context = {
             "userType" : request.session["userType"],
             "image_number" : len(all_images), 
@@ -89,8 +116,8 @@ def viewEventMedia(request, event_id):
     else:
         context = {}
         this_event = Event.objects.get(id = event_id)
-        this_event_images = Media.objects.filter(event_id = event_id, media_type = "image")
-        this_event_videos = Media.objects.filter(event_id = event_id, media_type = "video")
+        this_event_images = Media.objects.filter(event_id = event_id, media_type = "image").order_by('-date', "-date_time")
+        this_event_videos = Media.objects.filter(event_id = event_id, media_type = "video").order_by('-date', "-date_time")
         context["this_event"] = this_event
         context["userType"] = request.session["userType"]
         context["this_event_images"] = this_event_images
